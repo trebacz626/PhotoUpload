@@ -1,0 +1,4 @@
+Django>=4.0,<5.0  # Or your preferred Django version
+psycopg2-binary   # PostgreSQL adapter
+gunicorn          # WSGI server
+dj-database-url   # For easier DB URL parsing (optional but good practice)
