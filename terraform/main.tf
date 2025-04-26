@@ -310,6 +310,12 @@ resource "google_cloud_run_v2_service" "api_service" {
 
     containers {
       image = var.api_container_image
+
+      volume_mounts {
+         name       = "cloudsql"
+         mount_path = "/cloudsql"
+       }
+
       ports { container_port = 8080 }
       env {
         name  = "GCP_PROJECT"
@@ -370,6 +376,51 @@ resource "google_cloud_run_v2_service" "api_service" {
   ]
 }
 
+resource "google_service_account" "streamlit_sa" {
+  project      = var.project_id
+  account_id   = "${var.app_name}-streamlit-sa"
+  display_name = "Service Account for Landmark Streamlit Frontend"
+  depends_on   = [google_project_service.apis["iam.googleapis.com"]]
+}
+
+resource "google_cloud_run_v2_service" "streamlit_service" {
+  project  = var.project_id
+  name     = "${var.app_name}-streamlit"
+  location = var.region
+  ingress  = "INGRESS_TRAFFIC_ALL"
+
+  template {
+    service_account = google_service_account.streamlit_sa.email
+
+    containers {
+      image = var.streamlit_container_image
+      ports { container_port = 8501 }
+
+      env {
+        name = "BACKEND_API_URL"
+        value = google_cloud_run_v2_service.api_service.uri
+      }
+    }
+
+
+    scaling {
+      min_instance_count = 0
+      max_instance_count = 5
+    }
+  }
+
+  traffic {
+    type    = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
+    percent = 100
+  }
+
+  depends_on = [
+    google_cloud_run_v2_service.api_service,
+    google_service_account.streamlit_sa,
+    google_project_service.apis["run.googleapis.com"]
+  ]
+}
+
 ##TODO remove later when final deploy
 resource "google_cloud_run_v2_service_iam_member" "allow_unauthenticated_api" {
   project  = google_cloud_run_v2_service.api_service.project
@@ -379,6 +430,16 @@ resource "google_cloud_run_v2_service_iam_member" "allow_unauthenticated_api" {
   member   = "allUsers"
 
   depends_on = [google_cloud_run_v2_service.api_service]
+}
+
+resource "google_cloud_run_v2_service_iam_member" "allow_unauthenticated_streamlit" {
+  project  = google_cloud_run_v2_service.streamlit_service.project
+  location = google_cloud_run_v2_service.streamlit_service.location
+  name     = google_cloud_run_v2_service.streamlit_service.name
+  role     = "roles/run.invoker"
+  member   = "allUsers"
+
+  depends_on = [google_cloud_run_v2_service.streamlit_service]
 }
 
 

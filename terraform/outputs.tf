@@ -42,3 +42,8 @@ output "backend_api_url" {
   description = "URL of the deployed Cloud Run backend API"
   value = google_cloud_run_v2_service.api_service.uri
 }
+
+output "streamlit_app_url" {
+  description = "URL of the deployed Cloud Run Streamlit frontend"
+  value       = google_cloud_run_v2_service.streamlit_service.uri
+}

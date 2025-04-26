@@ -61,3 +61,8 @@ variable "api_container_image" {
   description = "Full path to the container image for the Cloud Run API (e.g., gcr.io/PROJECT_ID/APP_NAME-api:latest)."
   type        = string
 }
+
+variable "streamlit_container_image" {
+  description = "Full path to the container image for the Cloud Run Streamlit frontend."
+  type        = string
+}
