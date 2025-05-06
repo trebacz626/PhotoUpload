@@ -16,6 +16,76 @@ if not backend_url:
 if not backend_url.startswith(("http://", "https://")):
     backend_url = f"https://{backend_url}"
 
+### upload photo
+
+uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
+
+if uploaded_file is not None:
+    st.image(uploaded_file, caption="Selected Image", width=300)
+
+    if st.button("Upload"):
+        files = {"photo_id": (uploaded_file.name, uploaded_file, uploaded_file.type)}
+        response = requests.post(f"{backend_url}/api/upload_photo/", files=files)
+
+        if response.status_code == 200:
+            data = response.json()
+            st.success(data["message"])
+            st.image(f"{backend_url}{data['photo_url']}", caption="Uploaded Image", use_column_width=True)
+        else:
+            try:
+                error_data = response.json()
+                st.error(f"Upload failed: {error_data.get('errors') or error_data.get('message', 'Unknown error')}")
+            except ValueError:
+                st.error("Upload failed: Unable to parse error response.")
+###
+### get photo
+
+photo_id = st.number_input("Enter photo ID to view", min_value=1, step=1)
+
+if photo_id:
+    # GET Request to fetch the photo
+    if st.button("View Photo"):
+        response = requests.get(f"{backend_url}/api/photo/{photo_id}/")
+
+        if response.status_code == 200:
+            # Show image if successfully fetched
+            st.image(response.content, caption="Fetched Photo", width=300)
+        else:
+            st.error(f"Error: {response.json().get('message', 'Unknown error')}")
+
+###
+### delete photo
+
+if photo_id:
+    if st.button("Delete Photo"):
+        # Get CSRF token from the session cookie
+        csrf_token = os.environ.get('CSRF_TOKEN')  # Or get it dynamically from your session
+
+        # Set the CSRF token header
+        headers = {
+            'X-CSRFToken': csrf_token
+        }
+
+        # DELETE Request to delete the photo with CSRF token
+        response = requests.delete(f"{backend_url}/api/photo/{photo_id}/")
+
+        # Check if the response has JSON content
+        try:
+            response_data = response.json()
+            if response.status_code == 200:
+                # Show success message if deletion is successful
+                st.success(f"Photo with ID {photo_id} deleted successfully.")
+            else:
+                st.error(f"Error: {response_data.get('message', 'Unknown error')}")
+        except ValueError:
+            # If JSON decoding fails, handle it gracefully
+            if response.status_code == 200:
+                st.success(f"Photo with ID {photo_id} deleted successfully. But sth wrong.")
+            else:
+                st.error(f"Error: {response.text}")  # Show raw text if no JSON returned
+
+###
+
 full_check_url = f"{backend_url.rstrip('/')}{db_check_endpoint}"
 
 st.write(f"Checking backend database status at: `{full_check_url}`")
