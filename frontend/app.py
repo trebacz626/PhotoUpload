@@ -16,6 +16,43 @@ if not backend_url:
 if not backend_url.startswith(("http://", "https://")):
     backend_url = f"https://{backend_url}"
 
+### process photo
+
+landmark_id = st.text_input("Enter the photo ID (e.g. landmark_photos/photo123.jpg)")
+
+if st.button("Trigger Analysis"):
+    if not landmark_id:
+        st.warning("Please enter a photo ID.")
+        st.stop()
+
+    endpoint_url = f"{backend_url}/api/{landmark_id}/"
+
+    st.write(f"Calling: `{endpoint_url}`")
+
+    try:
+        response = requests.get(endpoint_url)
+        response.raise_for_status()
+    except requests.exceptions.HTTPError as errh:
+        st.error(f"HTTP Error: {errh}")
+        st.stop()
+
+    data = response.json()
+
+    if data["status"] == "success":
+        landmark = data["message"][0]
+        description = landmark["description"]
+        lat = landmark["locations"][0]["latitude"]
+        lon = landmark["locations"][0]["longitude"]
+
+        st.success(f"Landmark Detected: **{description}**")
+        st.write(f"📍 Latitude: `{lat}`")
+        st.write(f"📍 Longitude: `{lon}`")
+
+        st.map(data={"lat": [lat], "lon": [lon]})
+    else:
+        st.error("Failed to detect landmark.")
+
+###
 ### upload photo
 
 uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
@@ -40,12 +77,12 @@ if uploaded_file is not None:
 ###
 ### get photo
 
-photo_id = st.number_input("Enter photo ID to view", min_value=1, step=1)
+landmark_id = st.number_input("Enter photo ID to view", min_value=1, step=1)
 
-if photo_id:
+if landmark_id:
     # GET Request to fetch the photo
     if st.button("View Photo"):
-        response = requests.get(f"{backend_url}/api/photo/{photo_id}/")
+        response = requests.get(f"{backend_url}/api/photo/{landmark_id}/")
 
         if response.status_code == 200:
             # Show image if successfully fetched
@@ -56,7 +93,7 @@ if photo_id:
 ###
 ### delete photo
 
-if photo_id:
+if landmark_id:
     if st.button("Delete Photo"):
         # Get CSRF token from the session cookie
         csrf_token = os.environ.get('CSRF_TOKEN')  # Or get it dynamically from your session
@@ -67,20 +104,20 @@ if photo_id:
         }
 
         # DELETE Request to delete the photo with CSRF token
-        response = requests.delete(f"{backend_url}/api/photo/{photo_id}/")
+        response = requests.delete(f"{backend_url}/api/photo/{landmark_id}/")
 
         # Check if the response has JSON content
         try:
             response_data = response.json()
             if response.status_code == 200:
                 # Show success message if deletion is successful
-                st.success(f"Photo with ID {photo_id} deleted successfully.")
+                st.success(f"Photo with ID {landmark_id} deleted successfully.")
             else:
                 st.error(f"Error: {response_data.get('message', 'Unknown error')}")
         except ValueError:
             # If JSON decoding fails, handle it gracefully
             if response.status_code == 200:
-                st.success(f"Photo with ID {photo_id} deleted successfully. But sth wrong.")
+                st.success(f"Photo with ID {landmark_id} deleted successfully. But sth wrong.")
             else:
                 st.error(f"Error: {response.text}")  # Show raw text if no JSON returned
 

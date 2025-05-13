@@ -496,3 +496,9 @@ resource "google_project_iam_member" "api_sa_secret_accessor" {
   member     = "serviceAccount:${google_service_account.api_sa.email}"
   depends_on = [google_service_account.api_sa]
 }
+resource "google_project_iam_member" "api_sa_vision_user" {
+  project    = var.project_id
+  role       = "roles/vision.apiUser"
+  member     = "serviceAccount:${google_service_account.api_sa.email}"
+  depends_on = [google_service_account.api_sa]
+}
