@@ -347,6 +347,27 @@ resource "google_cloud_run_v2_service" "api_service" {
           }
         }
       }
+
+      env {
+        name = "VISION_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.vision_api_key_secret.secret_id
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "GEOCODING_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.geocoding_api_key_secret.secret_id
+            version = "latest"
+          }
+        }
+      }
+
     }
 
     vpc_access {

@@ -9,6 +9,8 @@ from django.shortcuts import render, redirect
 from .forms import ImageUploadForm
 from django.views.decorators.csrf import csrf_exempt
 from google.cloud import vision
+import requests
+from google.cloud import secretmanager
 # from django.conf import settings
 import io
 from django.contrib.auth.decorators import login_required
@@ -164,6 +166,48 @@ def detect_landmarks(path):
 
     return landmarks_info
 
+# def get_geocoding_api_key():
+#     client = secretmanager.SecretManagerServiceClient()
+#     project_id = "photoupload-457815"
+#     secret_name = "landmark-app-geocoding-api-key"
+#
+#     name = f"projects/{project_id}/secrets/{secret_name}/versions/latest"
+#     response = client.access_secret_version(request={"name": name})
+#
+#     return response.payload.data.decode("UTF-8")
+
+def get_geocoding_api_key():
+    from google.cloud import secretmanager
+    client = secretmanager.SecretManagerServiceClient()
+    project_id = "photoupload-457815"
+    secret_name = "landmark-app-geocoding-api-key"
+
+    name = f"projects/{project_id}/secrets/{secret_name}/versions/latest"
+
+    try:
+        response = client.access_secret_version(request={"name": name})
+        key = response.payload.data.decode("UTF-8")
+        print(f"Retrieved key: {key}")
+        return key
+    except Exception as e:
+        print(f"Error accessing secret: {e}")
+        return None
+
+def reverse_geocode(lat, lng, api_key):
+    url = "https://maps.googleapis.com/maps/api/geocode/json"
+    params = {
+        "latlng": f"{lat},{lng}",
+        "key": api_key
+    }
+    response = requests.get(url, params=params)
+    result = response.json()
+
+    if response.status_code != 200 or result.get("status") != "OK":
+        raise Exception(f"Geocoding API error: {result.get('error_message', result.get('status'))}")
+
+    return result["results"]
+
+
 def trigger_analysis(request, landmark_id):
     # TODO provide credentials and finish
     try:
@@ -185,7 +229,29 @@ def trigger_analysis(request, landmark_id):
             "photo_path": photo_path
         })
 
+    lat = detect_landmark_response[0]["locations"][0]["latitude"]
+    lng = detect_landmark_response[0]["locations"][0]["longitude"]
+
+    print(lat, lng)
+
+    # api_key = os.environ.get("GEOCODING_API_KEY")
+    api_key = get_geocoding_api_key()
+    # print(api_key)
+
+
+    try:
+        res = reverse_geocode(lat, lng, api_key)
+    except Exception as e:
+        print(e)
+
+    res = reverse_geocode(lat, lng, api_key)
+
     return JsonResponse({
             "status": "success",
-            "message": detect_landmark_response
+            "message": detect_landmark_response,
+            "api_key": api_key,
+            "res": res
         })
+
+
+
