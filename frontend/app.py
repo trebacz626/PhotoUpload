@@ -26,7 +26,6 @@ if st.button("Trigger Analysis"):
         st.stop()
 
     endpoint_url = f"{backend_url}/api/{landmark_id}/"
-
     st.write(f"Calling: `{endpoint_url}`")
 
     try:
@@ -39,16 +38,21 @@ if st.button("Trigger Analysis"):
     data = response.json()
 
     if data["status"] == "success":
-        landmark = data["message"][0]
-        description = landmark["description"]
-        lat = landmark["locations"][0]["latitude"]
-        lon = landmark["locations"][0]["longitude"]
+        lat = data.get("latitude")
+        lon = data.get("longitude")
+        geocoding_result = data.get("geocoding_result")
 
-        st.success(f"Landmark Detected: **{description}**")
-        st.write(f"📍 Latitude: `{lat}`")
-        st.write(f"📍 Longitude: `{lon}`")
+        if lat is not None and lon is not None:
+            st.success("Landmark coordinates detected!")
+            st.write(f"📍 Latitude: `{lat}`")
+            st.write(f"📍 Longitude: `{lon}`")
+            st.map(data={"lat": [lat], "lon": [lon]})
+        else:
+            st.warning("No coordinates detected for the landmark.")
 
-        st.map(data={"lat": [lat], "lon": [lon]})
+        if geocoding_result:
+            st.write("🗺️ Reverse Geocoding Result:")
+            st.json(geocoding_result)
     else:
         st.error("Failed to detect landmark.")
 

@@ -109,29 +109,9 @@ def delete_photo(request, landmark_id):
 
     return JsonResponse({"status": "ok", "message": "Photo deleted successfully."})
 
-# def detect_landmarks_uri(uri):
-#     """Detects landmarks in the file located in Google Cloud Storage or on the
-#     Web."""
-#
-#     client = vision.ImageAnnotatorClient()
-#     image = vision.Image()
-#     image.source.image_uri = uri
-#
-#     response = client.landmark_detection(image=image)
-#     landmarks = response.landmark_annotations
-#     print("Landmarks:")
-#
-#     for landmark in landmarks:
-#         print(landmark.description)
-#
-#     if response.error.message:
-#         raise Exception(
-#             "{}\nFor more info on error messages, check: "
-#             "https://cloud.google.com/apis/design/errors".format(response.error.message)
-#         )
 
 def detect_landmarks(path):
-    """Detects landmarks in the file."""
+    """Detects the first landmark and returns its first coordinate."""
     client = vision.ImageAnnotatorClient()
 
     with open(path, "rb") as image_file:
@@ -140,54 +120,43 @@ def detect_landmarks(path):
     image = vision.Image(content=content)
 
     response = client.landmark_detection(image=image)
-    landmarks = response.landmark_annotations
-    print("Landmarks:")
-
-    landmarks_info = []
-    for landmark in landmarks:
-        locations = []
-        print(landmark.description)
-        for location in landmark.locations:
-            lat_lng = location.lat_lng
-            locations.append({
-                "latitude": lat_lng.latitude,
-                "longitude": lat_lng.longitude
-            })
-            landmarks_info.append({
-                "description": landmark.description,
-                "locations": locations
-            })
 
     if response.error.message:
         raise Exception(
-            "{}\nFor more info on error messages, check: "
-            "https://cloud.google.com/apis/design/errors".format(response.error.message)
+            f"{response.error.message}\nFor more info on error messages, check: "
+            "https://cloud.google.com/apis/design/errors"
         )
 
-    return landmarks_info
+    landmarks = response.landmark_annotations
+    if not landmarks:
+        raise ValueError("No landmarks detected in the image.")
 
-# def get_geocoding_api_key():
-#     client = secretmanager.SecretManagerServiceClient()
-#     project_id = "photoupload-457815"
-#     secret_name = "landmark-app-geocoding-api-key"
-#
-#     name = f"projects/{project_id}/secrets/{secret_name}/versions/latest"
-#     response = client.access_secret_version(request={"name": name})
-#
-#     return response.payload.data.decode("UTF-8")
+    landmark = landmarks[0]  # take the first landmark
+    if not landmark.locations:
+        raise ValueError(f"Landmark '{landmark.description}' has no coordinates.")
+
+    lat_lng = landmark.locations[0].lat_lng
+    return {
+        "description": landmark.description,
+        "location": {
+            "latitude": lat_lng.latitude,
+            "longitude": lat_lng.longitude
+        }
+    }
+
 
 def get_geocoding_api_key():
     from google.cloud import secretmanager
     client = secretmanager.SecretManagerServiceClient()
-    project_id = "photoupload-457815"
-    secret_name = "landmark-app-geocoding-api-key"
+
+    project_id = os.environ.get("GCP_PROJECT", "photoupload-457815")
+    secret_name = f"{os.environ.get("APP_NAME", "landmark-app")}-geocoding-api-key"
 
     name = f"projects/{project_id}/secrets/{secret_name}/versions/latest"
 
     try:
         response = client.access_secret_version(request={"name": name})
         key = response.payload.data.decode("UTF-8")
-        print(f"Retrieved key: {key}")
         return key
     except Exception as e:
         print(f"Error accessing secret: {e}")
@@ -209,19 +178,46 @@ def reverse_geocode(lat, lng, api_key):
 
 
 def trigger_analysis(request, landmark_id):
-    # TODO provide credentials and finish
     try:
-        # getting the corresponding landmark object
+        # Get the corresponding landmark object
         landmark = Landmark.objects.get(landmark_id=landmark_id)
     except Landmark.DoesNotExist:
         raise Http404("No landmark found with that landmark_id.")
 
+    # Build full path to the photo
     photo_path = os.path.join(settings.MEDIA_ROOT, landmark.photo_id.name)
     if not os.path.exists(photo_path):
         return JsonResponse({"status": "error", "message": "File not found."}, status=404)
 
+    # Detect landmarks and extract coordinates
+    response = {
+        "status": None,
+        "message": None,
+        "latitude": None,
+        "longitude": None,
+        "geocoding_result": None
+    }
+
     try:
-        detect_landmark_response = detect_landmarks(photo_path)
+        landmark_info = detect_landmarks(photo_path)
+        landmark_location = landmark_info['location']
+        lat = landmark_location["latitude"]
+        lng = landmark_location["longitude"]
+
+    # lat and lng not detected
+    except ValueError as ve:
+        # marking the image as processed (no additional info available)
+        landmark.processed = True
+        landmark.save()
+
+        response["status"] = "success"
+        response["message"] = str(ve)
+        response["latitude"] = None
+        response["longitude"] = None
+        response["geocoding_result"] = None
+
+        return JsonResponse(response)
+
     except Exception as e:
         return JsonResponse({
             "status": "detect landmark error",
@@ -229,29 +225,57 @@ def trigger_analysis(request, landmark_id):
             "photo_path": photo_path
         })
 
-    lat = detect_landmark_response[0]["locations"][0]["latitude"]
-    lng = detect_landmark_response[0]["locations"][0]["longitude"]
+    # Retrieve the Geocoding API key from Secret Manager
+    try:
+        api_key = get_geocoding_api_key()
+    except Exception as e:
+        return JsonResponse({
+            "status": "secret access error",
+            "message": str(e)
+        })
 
-    print(lat, lng)
-
-    # api_key = os.environ.get("GEOCODING_API_KEY")
-    api_key = get_geocoding_api_key()
-    # print(api_key)
-
-
+    # Perform reverse geocoding
     try:
         res = reverse_geocode(lat, lng, api_key)
     except Exception as e:
-        print(e)
-
-    res = reverse_geocode(lat, lng, api_key)
-
-    return JsonResponse({
-            "status": "success",
-            "message": detect_landmark_response,
-            "api_key": api_key,
-            "res": res
+        return JsonResponse({
+            "status": "reverse geocoding error",
+            "message": str(e)
         })
 
+    # Update Landmark model fields
+    landmark.latitude = lat
+    landmark.longitude = lng
 
+    if res:
+        address = res[0]
+        landmark.formatted_address = address.get("formatted_address")
 
+        # Extract address components
+        components = address.get("address_components", [])
+
+        def get_component(short_type):
+            for comp in components:
+                if short_type in comp.get("types", []):
+                    return comp.get("long_name")
+            return None
+
+        landmark.street_number = get_component("street_number")
+        landmark.route = get_component("route")
+        landmark.neighborhood = get_component("neighborhood")
+        landmark.sublocality = get_component("sublocality")
+        landmark.state = get_component("administrative_area_level_1")
+        landmark.district = get_component("administrative_area_level_2")
+        landmark.country = get_component("country")
+        landmark.postal_code = get_component("postal_code")
+
+        # Save the updated landmark
+        landmark.processed = True
+        landmark.save()
+
+        response["status"] = "success"
+        response["latitude"] = lat
+        response["longitude"] = lng
+        response["geocoding_result"] = res
+
+    return JsonResponse(response)

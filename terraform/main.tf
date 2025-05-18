@@ -322,6 +322,10 @@ resource "google_cloud_run_v2_service" "api_service" {
         value = var.project_id
       }
       env {
+        name  = "APP_NAME"
+        value = var.app_name
+      }
+      env {
         name  = "DB_USER"
         value = var.db_user
       }
@@ -367,7 +371,6 @@ resource "google_cloud_run_v2_service" "api_service" {
           }
         }
       }
-
     }
 
     vpc_access {
