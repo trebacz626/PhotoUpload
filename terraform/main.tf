@@ -205,83 +205,7 @@ resource "google_service_account" "function_sa" {
   depends_on   = [google_project_service.apis["iam.googleapis.com"]]
 }
 
-# resource "google_cloudfunctions2_function" "processor_function" {
-#   project     = var.project_id
-#   name        = "${var.app_name}-processor"
-#   location    = var.region
 
-#   build_config {
-#     runtime     = var.function_runtime
-#     entry_point = var.function_entry_point
-#     source {
-#       storage_source {
-#         bucket = google_storage_bucket.function_source_bucket.name
-#         object = google_storage_bucket_object.function_source_object.name
-#       }
-#     }
-#   }
-
-#   service_config {
-#     max_instance_count = 5
-#     min_instance_count = 0
-#     available_memory   = "256Mi"
-#     timeout_seconds    = 120
-#     service_account_email = google_service_account.function_sa.email
-#     ingress_settings      = "ALLOW_INTERNAL_ONLY"
-#     all_traffic_on_latest_revision = true
-
-#     environment_variables = {
-#       GCP_PROJECT        = var.project_id
-#       DB_USER            = var.db_user
-#       DB_NAME            = var.db_name
-#       DB_INSTANCE_CONNECTION_NAME = google_sql_database_instance.db_instance.connection_name
-#     }
-
-#     secret_environment_variables {
-#        key = "DB_PASSWORD"
-#        project_id = var.project_id
-#        secret = google_secret_manager_secret.db_password_secret.secret_id
-#        version = "latest"
-#     }
-#     secret_environment_variables {
-#        key = "VISION_API_KEY"
-#        project_id = var.project_id
-#        secret = google_secret_manager_secret.vision_api_key_secret.secret_id
-#        version = "latest"
-#     }
-#     secret_environment_variables {
-#        key = "GEOCODING_API_KEY"
-#        project_id = var.project_id
-#        secret = google_secret_manager_secret.geocoding_api_key_secret.secret_id
-#        version = "latest"
-#     }
-
-#     vpc_connector                  = google_vpc_access_connector.connector.id
-#     vpc_connector_egress_settings = "PRIVATE_RANGES_ONLY"
-#   }
-
-#   event_trigger {
-#      trigger_region = var.region
-#      event_type     = "google.cloud.storage.object.v1.finalized"
-#      retry_policy   = "RETRY_POLICY_RETRY"
-#      service_account_email = google_service_account.function_sa.email
-#      event_filters {
-#         attribute = "bucket"
-#         value = google_storage_bucket.photos_bucket.name
-#      }
-#   }
-
-#   depends_on = [
-#     google_storage_bucket_object.function_source_object,
-#     google_vpc_access_connector.connector,
-#     google_service_account.function_sa,
-#     google_secret_manager_secret_version.db_password_version,
-#     google_secret_manager_secret_version.vision_api_key_version,
-#     google_secret_manager_secret_version.geocoding_api_key_version,
-#     google_project_service.apis["eventarc.googleapis.com"],
-#     google_sql_database_instance.db_instance
-#   ]
-# }
 
 # Cloud Run API Service
 # Service Account for the Cloud Run API
@@ -343,6 +267,27 @@ resource "google_cloud_run_v2_service" "api_service" {
         value_source {
           secret_key_ref {
             secret  = google_secret_manager_secret.db_password_secret.secret_id
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name = "VISION_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.vision_api_key_secret.secret_id
+            version = "latest"
+          }
+        }
+      }
+
+
+      env {
+        name = "GEOCODING_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.geocoding_api_key_secret.secret_id
             version = "latest"
           }
         }
@@ -495,4 +440,15 @@ resource "google_project_iam_member" "api_sa_secret_accessor" {
   role       = "roles/secretmanager.secretAccessor"
   member     = "serviceAccount:${google_service_account.api_sa.email}"
   depends_on = [google_service_account.api_sa]
+}
+
+resource "google_project_iam_member" "api_sa_vision_user" {
+  project = var.project_id
+  role    = "roles/aiplatform.user" # <--- CHANGE THIS ROLE
+  member  = "serviceAccount:${google_service_account.api_sa.email}"
+  depends_on = [
+    google_service_account.api_sa,
+    google_project_service.apis["vision.googleapis.com"],      # Keep this dependency
+    google_project_service.apis["aiplatform.googleapis.com"] # Good to also ensure this is enabled
+  ]
 }

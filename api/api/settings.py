@@ -39,17 +39,29 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'photouploadapi'
+    'photouploadapi',
+    'drf_yasg',
+    'rest_framework',
+    'rest_framework.authtoken',
+    'allauth',
+    'allauth.account', 
+    'allauth.socialaccount',
+    'dj_rest_auth',
+    'dj_rest_auth.registration',
 ]
+
+SITE_ID = 1
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'allauth.account.middleware.AccountMiddleware'
 ]
 
 ROOT_URLCONF = 'api.urls'
@@ -79,26 +91,37 @@ db_user = os.environ.get('DB_USER')
 db_name = os.environ.get('DB_NAME')
 db_password = os.environ.get('DB_PASSWORD') # We'll inject this via secrets
 db_instance_connection_name = os.environ.get('DB_INSTANCE_CONNECTION_NAME')
-
-
-if not all([db_user, db_name, db_password, db_instance_connection_name]):
-    print("Warning: One or more database environment variables are missing.")
+print(os.environ.get('USE_DB_PROXY', 'false').lower())
+if os.environ.get('USE_DB_PROXY', 'false').lower() == 'true':
     DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3', d
-        }
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': db_name,
+        'USER': db_user,
+        'PASSWORD': db_password,
+        'HOST': '127.0.0.1', # Connect to the local proxy
+        'PORT': '5433',     # The port your proxy is listening on
     }
+}
 else:
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': db_name,
-            'USER': db_user,
-            'PASSWORD': db_password,
-            'HOST': f'/cloudsql/{db_instance_connection_name}',
+    if not all([db_user, db_name, db_password, db_instance_connection_name]):
+        print("Warning: One or more database environment variables are missing.")
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': BASE_DIR / 'db.sqlite3', 
+            }
         }
-    }
+    else:
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.postgresql',
+                'NAME': db_name,
+                'USER': db_user,
+                'PASSWORD': db_password,
+                'HOST': f'/cloudsql/{db_instance_connection_name}',
+            }
+        }
     
 # DATABASES = {'default': dj_database_url.config(default=os.environ.get('DATABASE_URL'))}
 
@@ -139,8 +162,45 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+REST_FRAMEWORK = {
+
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.AllowAny'
+    ],
+
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication', 
+        'rest_framework.authentication.TokenAuthentication',  
+    ],
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 10
+}
+
+
+ACCOUNT_EMAIL_VERIFICATION = 'optional'
+ACCOUNT_AUTHENTICATION_METHOD = 'username_email'
+ACCOUNT_EMAIL_REQUIRED = True
+ACCOUNT_USERNAME_REQUIRED = True 
+
+
+REST_AUTH = {
+    'REGISTER_SERIALIZER': 'dj_rest_auth.registration.serializers.RegisterSerializer',
+    'USER_DETAILS_SERIALIZER': 'dj_rest_auth.serializers.UserDetailsSerializer',
+}
+
+
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+
+SERVICE_URL = os.environ.get('SERVICE_URL', 'https://landmark-app-api-jcj4dqmava-lm.a.run.app') 
+CSRF_TRUSTED_ORIGINS = [
+   '*'
+]

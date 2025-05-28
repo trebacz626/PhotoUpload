@@ -7,3 +7,17 @@ export IMAGE_TAG="latest"
 
 docker build -t ${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${STREAMLIT_IMAGE_NAME}:${IMAGE_TAG} .
 docker push ${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${STREAMLIT_IMAGE_NAME}:${IMAGE_TAG}
+
+export IMAGE_DIGEST=$(gcloud artifacts docker images describe \
+  ${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${STREAMLIT_IMAGE_NAME}:${IMAGE_TAG} \
+  --project=${PROJECT_ID} \
+  --format='get(image_summary.digest)')
+
+echo "The digest for your pushed image is: ${IMAGE_DIGEST}"
+
+FULL_IMAGE_WITH_DIGEST="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${STREAMLIT_IMAGE_NAME}@${IMAGE_DIGEST}"
+
+cd ../terraform
+
+terraform apply \
+  -var="streamlit_container_image=${FULL_IMAGE_WITH_DIGEST}" \
