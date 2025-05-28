@@ -271,6 +271,27 @@ resource "google_cloud_run_v2_service" "api_service" {
           }
         }
       }
+
+      env {
+        name = "VISION_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.vision_api_key_secret.secret_id
+            version = "latest"
+          }
+        }
+      }
+
+
+      env {
+        name = "GEOCODING_API_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.geocoding_api_key_secret.secret_id
+            version = "latest"
+          }
+        }
+      }
     }
 
     vpc_access {
@@ -419,4 +440,15 @@ resource "google_project_iam_member" "api_sa_secret_accessor" {
   role       = "roles/secretmanager.secretAccessor"
   member     = "serviceAccount:${google_service_account.api_sa.email}"
   depends_on = [google_service_account.api_sa]
+}
+
+resource "google_project_iam_member" "api_sa_vision_user" {
+  project = var.project_id
+  role    = "roles/aiplatform.user" # <--- CHANGE THIS ROLE
+  member  = "serviceAccount:${google_service_account.api_sa.email}"
+  depends_on = [
+    google_service_account.api_sa,
+    google_project_service.apis["vision.googleapis.com"],      # Keep this dependency
+    google_project_service.apis["aiplatform.googleapis.com"] # Good to also ensure this is enabled
+  ]
 }

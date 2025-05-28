@@ -13,19 +13,20 @@ import os
 from google.cloud import storage, vision
 import googlemaps 
 import uuid
+import requests
 
 User = get_user_model()
 
 
 
 PHOTOS_BUCKET_NAME = os.environ.get("PHOTOS_BUCKET_NAME", "your-gcs-photos-bucket-name")
-# VISION_API_KEY = os.environ.get("VISION_API_KEY")
-# GEOCODING_API_KEY = os.environ.get("GEOCODING_API_KEY")
+VISION_API_KEY = os.environ.get("VISION_API_KEY")
+GEOCODING_API_KEY = os.environ.get("GEOCODING_API_KEY")
 
 
 storage_client = storage.Client()
-# vision_client = vision.ImageAnnotatorClient()
-# gmaps_client = googlemaps.Client(key=GEOCODING_API_KEY)
+vision_client = vision.ImageAnnotatorClient()
+gmaps_client = googlemaps.Client(key=GEOCODING_API_KEY)
 
 def db_check(request):
     try:
@@ -86,11 +87,24 @@ class PhotoViewSet(viewsets.GenericViewSet):
             original_filename=original_filename,
             processing_status='pending'
         )
-        
-        # self._perform_photo_analysis(photo)
+        try:
+            landmark = self._perform_photo_analysis(photo)
+            landmark.save()
+        except Exception as e:
+            photo.processing_status = 'failed'
+            photo.save()
+            return Response({"error": "Photo analysis failed.", "details": str(e)},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        response_serializer = PhotoSerializer(photo)
-        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+        photo.processing_status = 'completed'
+        photo.save()            
+
+        photo_response_serializer = PhotoSerializer(photo)
+        landmark_serializer = LandmarkSerializer(landmark)
+        return Response({
+            "photo": photo_response_serializer.data,
+            "landmark": landmark_serializer.data
+        }, status=status.HTTP_201_CREATED)
 
     def _extract_address_component(self, address_components, component_type):
         for component in address_components:
@@ -104,11 +118,98 @@ class PhotoViewSet(viewsets.GenericViewSet):
         This simulates calls to Vision and Geocoding APIs.
         Ideally, this runs asynchronously.
         """
-        # photo.processing_status = 'processing'
-        # photo.save()
+        photo.processing_status = 'processing'
+        photo.save()
         
-        #TODO call landmark api and detection api 
-        raise NotImplementedError("Landmark detection API not implemented yet")
+        
+        try:
+            url = f'https://vision.googleapis.com/v1/images:annotate?key={VISION_API_KEY}'
+
+            data = {
+            "requests": [
+                {
+                "image": {
+                    "source": {
+                    "imageUri": "gs://cloud-samples-data/vision/landmark/st_basils.jpeg"
+                    }
+                },
+                "features": [
+                    {
+                    "type": "LANDMARK_DETECTION",
+                    "maxResults": 1
+                    }
+                ]
+                }
+            ]
+            }
+
+            # Send the request
+            response = requests.post(url, json=data)
+            result = response.json()
+            
+            landmarks = result.get('responses', [])[0].get('landmarkAnnotations', [])
+            if not landmarks or len(landmarks) == 0:
+                photo.processing_status = 'completed'
+                photo.save()
+                landmark = Landmark.objects.create(photo=photo, detected_landmark_name=str(response))
+                return landmark
+
+
+            landmark = landmarks[0]  # take the first landmark
+            if "locations" not in landmark or len(landmark["locations"]) == 0:
+                raise ValueError(f"Landmark {landmark['description']} has no coordinates.")
+
+            lat_lng = landmark["locations"][0]["latLng"]
+            
+            latitude = lat_lng["latitude"]
+            longitude = lat_lng["longitude"]
+            
+            try:
+                reverse_geocode_result = self._reverse_geocode(latitude, longitude, GEOCODING_API_KEY)
+                if not reverse_geocode_result:
+                    raise ValueError("Reverse geocoding returned no results.")
+                landmark = Landmark.objects.create(
+                    photo=photo,
+                    detected_landmark_name=landmark["description"],
+                    latitude=latitude,
+                    longitude=longitude,
+                    formatted_address=reverse_geocode_result[0].get('formatted_address'),
+                    street_number=self._extract_address_component(reverse_geocode_result[0].get('address_components', []), 'street_number'),
+                    route=self._extract_address_component(reverse_geocode_result[0].get('address_components', []), 'route'),
+                    neighborhood=self._extract_address_component(reverse_geocode_result[0].get('address_components', []), 'neighborhood'),
+                    sublocality=self._extract_address_component(reverse_geocode_result[0].get('address_components', []), 'sublocality'),
+                    state=self._extract_address_component(reverse_geocode_result[0].get('address_components', []), 'administrative_area_level_1'),
+                    district=self._extract_address_component(reverse_geocode_result[0].get('address_components', []), 'administrative_area_level_2'),
+                    country=self._extract_address_component(reverse_geocode_result[0].get('address_components', []), 'country'),
+                    postal_code=self._extract_address_component(reverse_geocode_result[0].get('address_components', []), 'postal_code')
+                )
+                return landmark
+            except Exception as e:
+                photo.processing_status = 'failed'
+                photo.save()
+                raise Exception(f"Geocoding failed: {str(e)}")
+        except Exception as e:
+            photo.processing_status = 'failed'
+            photo.save()
+            raise e
+            
+            
+            
+            
+    def _reverse_geocode(self, lat, lng, api_key):
+        url = "https://maps.googleapis.com/maps/api/geocode/json"
+        params = {
+            "latlng": f"{lat},{lng}",
+            "key": api_key
+        }
+        response = requests.get(url, params=params)
+        result = response.json()
+
+        if response.status_code != 200 or result.get("status") != "OK":
+            raise Exception(f"Geocoding API error: {result.get('error_message', result.get('status'))}")
+
+        return result["results"]
+
 
 
     @action(detail=True, methods=['post'], url_path='trigger_analysis')
@@ -176,12 +277,5 @@ def list_user_photos(request, user_id):
     target_user = get_object_or_404(User, pk=user_id)
     photos = Photo.objects.filter(user=target_user).order_by('-upload_time')
     
-    basic_data = [{
-        "photo_id": photo.id,
-        "original_filename": photo.original_filename,
-        "upload_time": photo.upload_time,
-        "processing_status": photo.processing_status,
-        "url": f"https://storage.googleapis.com/{PHOTOS_BUCKET_NAME}/{photo.gcs_blob_name}"
-    } for photo in photos]
-    
-    return Response(basic_data)
+    serializer = PhotoSerializer(photos, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)

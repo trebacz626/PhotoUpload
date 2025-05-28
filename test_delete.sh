@@ -34,10 +34,10 @@ echo "Successfully obtained authentication token."
 
 # --- 2. Upload Photo ---
 echo "Attempting to upload '$IMAGE_FILE'..."
-UPLOAD_RESPONSE=$(curl -s -X POST \
+UPLOAD_RESPONSE=$(curl -s -X DELETE \
   -H "Authorization: Token ${AUTH_TOKEN}" \
   -F "image=@${IMAGE_FILE}" \
-  "${SERVICE_URL}/api/v1/photos/upload_photo/")
+  "${SERVICE_URL}/api/v1/photos/1/delete/")
 
 # --- 3. Display Response ---
 echo ""

@@ -34,10 +34,9 @@ echo "Successfully obtained authentication token."
 
 # --- 2. Upload Photo ---
 echo "Attempting to upload '$IMAGE_FILE'..."
-UPLOAD_RESPONSE=$(curl -s -X POST \
+UPLOAD_RESPONSE=$(curl -s -X GET \
   -H "Authorization: Token ${AUTH_TOKEN}" \
-  -F "image=@${IMAGE_FILE}" \
-  "${SERVICE_URL}/api/v1/photos/upload_photo/")
+  "${SERVICE_URL}/api/v1/users/1/photos/")
 
 # --- 3. Display Response ---
 echo ""
@@ -45,10 +44,8 @@ echo "Upload Response:"
 # If jq is available, try to pretty-print if it's JSON, otherwise print raw
 if command -v jq &> /dev/null && echo "${UPLOAD_RESPONSE}" | jq . > /dev/null 2>&1; then
   echo "${UPLOAD_RESPONSE}" | jq .
-  echo "${UPLOAD_RESPONSE}" | jq . > out.html
 else
   echo "${UPLOAD_RESPONSE}"
-  echo "${UPLOAD_RESPONSE}" > out.html
 fi
 
 echo ""
