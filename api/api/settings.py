@@ -202,5 +202,6 @@ EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 SERVICE_URL = os.environ.get('SERVICE_URL', 'https://landmark-app-api-jcj4dqmava-lm.a.run.app') 
 CSRF_TRUSTED_ORIGINS = [
-   '*'
-]
+    '*',
+    # 'http://localhost:8000',
+] # replacing '*'

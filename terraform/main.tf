@@ -452,3 +452,10 @@ resource "google_project_iam_member" "api_sa_vision_user" {
     google_project_service.apis["aiplatform.googleapis.com"] # Good to also ensure this is enabled
   ]
 }
+
+resource "google_secret_manager_secret_iam_member" "db_password_secret_access" {
+  secret_id = google_secret_manager_secret.db_password_secret.id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.api_sa.email}"
+  depends_on = [google_secret_manager_secret.db_password_secret, google_service_account.api_sa]
+}
