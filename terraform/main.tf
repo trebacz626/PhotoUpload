@@ -459,3 +459,29 @@ resource "google_secret_manager_secret_iam_member" "db_password_secret_access" {
   member    = "serviceAccount:${google_service_account.api_sa.email}"
   depends_on = [google_secret_manager_secret.db_password_secret, google_service_account.api_sa]
 }
+
+### permissions for accessing photos
+# resource "google_project_iam_member" "eventarc_publisher" {
+#   project = var.project_id
+#   role    = "roles/eventarc.publisher"
+#   member  = "serviceAccount:${google_service_account.api_sa.email}"
+# }
+#
+# resource "google_project_iam_member" "terraform_sa_serviceusage_admin" {
+#   project = var.project_id
+#   role    = "roles/serviceusage.serviceUsageAdmin"
+#   member  = "serviceAccount:${google_service_account.api_sa.email}"
+# }
+#
+# resource "google_project_iam_member" "terraform_sa_iam_admin" {
+#   project = var.project_id
+#   role    = "roles/resourcemanager.projectIamAdmin"
+#   member  = "serviceAccount:${google_service_account.api_sa.email}"
+# }
+
+# reading
+resource "google_storage_bucket_iam_member" "api_sa_bucket_reader" {
+  bucket = "${google_storage_bucket.photos_bucket.name}"
+  role   = "roles/storage.objectViewer"
+  member  = "serviceAccount:${google_service_account.api_sa.email}"
+}

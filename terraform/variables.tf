@@ -66,3 +66,9 @@ variable "streamlit_container_image" {
   description = "Full path to the container image for the Cloud Run Streamlit frontend."
   type        = string
 }
+
+# path to key for accessing photos
+# variable "google_credentials_path" {
+#   description = "Path to the GCP service account JSON credentials file"
+#   type        = string
+# }

@@ -14,17 +14,22 @@ from google.cloud import storage, vision
 import googlemaps 
 import uuid
 import requests
+from datetime import timedelta
+from django.utils import timezone
+import traceback
+
 
 User = get_user_model()
-
-
 
 PHOTOS_BUCKET_NAME = os.environ.get("PHOTOS_BUCKET_NAME", "your-gcs-photos-bucket-name")
 VISION_API_KEY = os.environ.get("VISION_API_KEY")
 GEOCODING_API_KEY = os.environ.get("GEOCODING_API_KEY")
 
 
-storage_client = storage.Client()
+# storage_client = storage.Client()
+key_path = os.path.join(os.path.dirname(__file__), '../keys/photoupload-457815-a0b94f392541.json')
+storage_client = storage.Client.from_service_account_json(key_path)
+
 vision_client = vision.ImageAnnotatorClient()
 gmaps_client = googlemaps.Client(key=GEOCODING_API_KEY)
 
@@ -44,7 +49,6 @@ def db_check(request):
 
 def hello(request):
     return JsonResponse({"message": "Hello from Django API!"})
-
 
 
 class PhotoViewSet(viewsets.GenericViewSet):
@@ -260,6 +264,34 @@ class PhotoViewSet(viewsets.GenericViewSet):
 
         photo.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=['get'], url_path='signed_url')
+    def generate_signed_url(self, request, pk=None):
+        """
+        GET /api/v1/photos/{photo_id}/signed_url/
+        Returns a temporary signed URL to access the photo.
+        """
+        photo = get_object_or_404(Photo, pk=pk, user=request.user)
+
+        try:
+            bucket = storage_client.bucket(PHOTOS_BUCKET_NAME)
+            blob = bucket.blob(photo.gcs_blob_name)
+
+            # Generate signed URL valid for 60 minutes
+            url = blob.generate_signed_url(
+                expiration=timedelta(minutes=60),
+                method='GET',
+                version='v4'
+            )
+
+            return Response({"signed_url": url})
+        # except Exception as e:
+        #     return Response({"error": "Failed to generate signed URL.", "details": str(e)},
+        #                     status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception as e:
+            print(traceback.format_exc())  # Or log to a logger
+            return Response({"error": "Failed to generate signed URL.", "details": str(e)},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['GET'])

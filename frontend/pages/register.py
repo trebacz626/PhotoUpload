@@ -1,6 +1,6 @@
 import streamlit as st
+from api.client import get_base_url, login_user
 import requests
-from api.client import get_base_url
 
 BACKEND_URL = get_base_url()
 
@@ -27,14 +27,29 @@ if st.button("Register"):
         try:
             response = requests.post(
                 f"{BACKEND_URL}/api/v1/auth/registration/",
-                json=data,  # ✅ Send JSON, not form data
+                json=data,
                 headers={"Content-Type": "application/json"}
             )
 
-            st.write("Response status code:", response.status_code)
-
             if response.status_code == 201:
-                st.success("Registration successful. You can now log in.")
+                st.success("Registration successful!")
+
+                # Use the shared login_user function
+                login_response = login_user(username, password1)
+
+                if login_response.status_code == 200:
+                    token = login_response.json().get("key")
+                    if token:
+                        st.session_state["auth_token"] = token
+                        st.session_state["username"] = username
+                        st.success("Logged in successfully!")
+                        st.rerun()
+                    else:
+                        st.warning("Login successful but no token received.")
+                else:
+                    st.error("Registration succeeded, but login failed.")
+                    st.error(login_response.text)
+
             else:
                 try:
                     st.error(f"Error: {response.json()}")

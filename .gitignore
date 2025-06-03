@@ -92,3 +92,6 @@ htmlcov/
 nosetests.xml
 coverage.xml
 *.cover
+
+# key
+/api/keys/*.json
