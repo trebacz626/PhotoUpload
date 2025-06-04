@@ -16,6 +16,45 @@ def login_user(username, password):
         headers={"Content-Type": "application/json"}  # explicit header
     )
 
+def logout_user(token):
+    base_url = get_base_url()
+    url = f"{base_url}/api/v1/auth/logout/"
+    headers = {"Authorization": f"Token {token}"}
+    response = requests.post(url, headers=headers)
+    if response.status_code in [200, 201]:
+        return {"success": True}
+    else:
+        return {"success": False, "error": response.text}
+
+def upload_photo(file_obj, filename, content_type, token=None):
+    url = f"{get_base_url()}/api/photos/upload_photo/"
+    headers = {}
+
+    if token:
+        headers["Authorization"] = f"Token {token}"
+
+    files = {
+        "image": (filename, file_obj, content_type)
+    }
+
+    response = requests.post(url, files=files, headers=headers)
+
+    if response.status_code in (200, 201):
+        return {"success": True, "response": response.json()}
+    else:
+        return {"success": False, "status_code": response.status_code, "error": response.text}
+
+def delete_photo(photo_id, token):
+    url = f"{get_base_url()}/api/v1/photos/{photo_id}/delete/"
+    headers = {"Authorization": f"Token {token}"}
+
+    response = requests.delete(url, headers=headers)
+
+    if response.status_code == 204:
+        return {"success": True}
+    else:
+        return {"success": False, "status_code": response.status_code, "error": response.text}
+
 def get_user_photos(user_id, token):
     base_url = get_base_url()
     headers = {"Authorization": f"Token {token}"}
@@ -42,20 +81,11 @@ def get_current_user(token):
 def get_photo_details(photo_id, token):
     base_url = get_base_url()
     headers = {"Authorization": f"Token {token}"}
-    response = requests.get(f"{base_url}/api/v1/photos/{photo_id}/details/", headers=headers)
+    response = requests.get(f"{base_url}/api/photos/{photo_id}/details/", headers=headers)
     if response.status_code == 200:
         return response.json()
     else:
         return None
-
-# def get_signed_url(photo_id, token):
-#     base_url = get_base_url()
-#     headers = {"Authorization": f"Token {token}"}
-#     response = requests.get(f"{base_url}/api/v1/photos/{photo_id}/signed_url/", headers=headers)
-#     if response.status_code == 200:
-#         return response.json().get("signed_url")
-#     return None
-
 
 def get_signed_url(photo_id, token):
     base_url = get_base_url()
@@ -68,4 +98,3 @@ def get_signed_url(photo_id, token):
         # Add logging to help debug
         st.warning(f"Signed URL error: {response.status_code} — {response.text}")
         return None
-

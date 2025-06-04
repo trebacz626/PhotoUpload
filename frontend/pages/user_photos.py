@@ -13,7 +13,7 @@ token = st.session_state["auth_token"]  # <-- Define token here
 user_info = get_current_user(token)
 
 if not user_info or "pk" not in user_info:
-    st.error("Failed to retrieve user information.")
+    st.warning("You must be logged in to view your photos.")
     st.stop()
 
 user_id = user_info["pk"]

@@ -2,8 +2,9 @@ import streamlit as st
 import requests
 import os
 from utils.session_state import get_session_state
+from api.client import logout_user
 
-
+# setting backend url
 backend_url = os.environ.get("BACKEND_API_URL")
 
 if not backend_url:
@@ -18,6 +19,22 @@ st.session_state["BACKEND_API_URL"] = backend_url
 st.set_page_config(page_title="Photo Upload App", layout="wide")
 
 state = get_session_state()
+
+# logout
+if state.get("is_logged_in"):
+    with st.sidebar:
+        if st.button("🚪 Log Out"):
+            result = logout_user(state["auth_token"])
+            if result.get("success"):
+                st.success("Logged out successfully.")
+                # Clear session
+                for key in list(state.keys()):
+                    del state[key]
+                st.rerun()
+            else:
+                st.error(f"Logout failed: {result.get('error')}")
+
+
 
 st.title("Photo Upload App - Database Status")
 st.write("Use the sidebar to **login** or view your **uploaded photos**.")
@@ -34,40 +51,3 @@ if state['is_logged_in']:
     st.success("✅ You are logged in.")
 else:
     st.info("🔑 You are not logged in.")
-
-### tests
-
-# try:
-#
-#     response = requests.get(full_check_url, timeout=15)
-#     response.raise_for_status()
-#
-#     st.success("Successfully connected to the backend API.")
-#
-#     try:
-#         data = response.json()
-#         st.subheader("Backend Response:")
-#         st.json(data)
-#
-#         if data.get("status") == "ok":
-#             st.success(f"Database Status: OK - {data.get('message', '')}")
-#         else:
-#             st.error(f"Database Status: Error- {data.get('message', '')}")
-#
-#     except requests.exceptions.JSONDecodeError:
-#         st.error("Backend response was not valid JSON.")
-#         st.text(response.text)
-#
-# except requests.exceptions.ConnectionError as e:
-#     st.error(f"Connection Error: Could not connect to the backend API at {full_check_url}.")
-#     st.error(f"Details: {e}")
-# except requests.exceptions.Timeout:
-#     st.error(f"Timeout Error")
-# except requests.exceptions.RequestException as e:
-#     st.error(f"Request Error: An error occurred while contacting the backend API.")
-#     st.error(f"Details: {e}")
-#     if e.response is not None:
-#         st.error(f"Status Code: {e.response.status_code}")
-#         st.text(f"Response Text: {e.response.text}")
-#
-# st.button("Re-check Status")
