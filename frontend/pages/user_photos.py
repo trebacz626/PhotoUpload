@@ -36,6 +36,7 @@ else:
 
         if photo_id:
             signed_url = get_signed_url(photo_id, token)
+            st.markdown(signed_url)
             if signed_url:
                 st.image(signed_url, caption=filename, use_container_width=True)
             else:

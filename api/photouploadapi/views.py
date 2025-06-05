@@ -124,8 +124,11 @@ class PhotoViewSet(viewsets.GenericViewSet):
         """
         photo.processing_status = 'processing'
         photo.save()
-        
-        
+
+        response_photo = self.sign_photo(photo)
+
+        signed_url = response_photo.data.get("signed_url")
+
         try:
             url = f'https://vision.googleapis.com/v1/images:annotate?key={VISION_API_KEY}'
 
@@ -134,7 +137,7 @@ class PhotoViewSet(viewsets.GenericViewSet):
                 {
                 "image": {
                     "source": {
-                    "imageUri": "gs://cloud-samples-data/vision/landmark/st_basils.jpeg"
+                    "imageUri": signed_url
                     }
                 },
                 "features": [
@@ -150,16 +153,17 @@ class PhotoViewSet(viewsets.GenericViewSet):
             # Send the request
             response = requests.post(url, json=data)
             result = response.json()
-            
+
             landmarks = result.get('responses', [])[0].get('landmarkAnnotations', [])
+
             if not landmarks or len(landmarks) == 0:
                 photo.processing_status = 'completed'
                 photo.save()
                 landmark = Landmark.objects.create(photo=photo, detected_landmark_name=str(response))
                 return landmark
 
-
             landmark = landmarks[0]  # take the first landmark
+
             if "locations" not in landmark or len(landmark["locations"]) == 0:
                 raise ValueError(f"Landmark {landmark['description']} has no coordinates.")
 
@@ -196,10 +200,7 @@ class PhotoViewSet(viewsets.GenericViewSet):
             photo.processing_status = 'failed'
             photo.save()
             raise e
-            
-            
-            
-            
+
     def _reverse_geocode(self, lat, lng, api_key):
         url = "https://maps.googleapis.com/maps/api/geocode/json"
         params = {
@@ -213,8 +214,6 @@ class PhotoViewSet(viewsets.GenericViewSet):
             raise Exception(f"Geocoding API error: {result.get('error_message', result.get('status'))}")
 
         return result["results"]
-
-
 
     @action(detail=True, methods=['post'], url_path='trigger_analysis')
     def trigger_analysis_for_photo(self, request, pk=None):
@@ -265,14 +264,7 @@ class PhotoViewSet(viewsets.GenericViewSet):
         photo.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-    @action(detail=True, methods=['get'], url_path='signed_url')
-    def generate_signed_url(self, request, pk=None):
-        """
-        GET /api/v1/photos/{photo_id}/signed_url/
-        Returns a temporary signed URL to access the photo.
-        """
-        photo = get_object_or_404(Photo, pk=pk, user=request.user)
-
+    def sign_photo(self, photo):
         try:
             bucket = storage_client.bucket(PHOTOS_BUCKET_NAME)
             blob = bucket.blob(photo.gcs_blob_name)
@@ -285,13 +277,41 @@ class PhotoViewSet(viewsets.GenericViewSet):
             )
 
             return Response({"signed_url": url})
-        # except Exception as e:
-        #     return Response({"error": "Failed to generate signed URL.", "details": str(e)},
-        #                     status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         except Exception as e:
             print(traceback.format_exc())  # Or log to a logger
             return Response({"error": "Failed to generate signed URL.", "details": str(e)},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+    @action(detail=True, methods=['get'], url_path='signed_url')
+    def generate_signed_url(self, request, pk=None):
+        """
+        GET /api/v1/photos/{photo_id}/signed_url/
+        Returns a temporary signed URL to access the photo.
+        """
+        photo = get_object_or_404(Photo, pk=pk, user=request.user)
+
+        return self.sign_photo(photo)
+
+        # try:
+        #     bucket = storage_client.bucket(PHOTOS_BUCKET_NAME)
+        #     blob = bucket.blob(photo.gcs_blob_name)
+        #
+        #     # Generate signed URL valid for 60 minutes
+        #     url = blob.generate_signed_url(
+        #         expiration=timedelta(minutes=60),
+        #         method='GET',
+        #         version='v4'
+        #     )
+        #
+        #     return Response({"signed_url": url})
+        # # except Exception as e:
+        # #     return Response({"error": "Failed to generate signed URL.", "details": str(e)},
+        # #                     status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        # except Exception as e:
+        #     print(traceback.format_exc())  # Or log to a logger
+        #     return Response({"error": "Failed to generate signed URL.", "details": str(e)},
+        #                     status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['GET'])
