@@ -4,6 +4,7 @@ from django.contrib.auth.models import User
 
 from django.db import models
 from django.conf import settings 
+import uuid
 
 class Photo(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='photos')

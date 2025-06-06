@@ -4,6 +4,7 @@ import requests
 
 BACKEND_URL = get_base_url()
 
+st.set_page_config(page_title="Register")
 st.title("Register")
 
 username = st.text_input("Username")
@@ -34,7 +35,6 @@ if st.button("Register"):
             if response.status_code == 201:
                 st.success("Registration successful!")
 
-                # Use the shared login_user function
                 login_response = login_user(username, password1)
 
                 if login_response.status_code == 200:
@@ -43,7 +43,8 @@ if st.button("Register"):
                         st.session_state["auth_token"] = token
                         st.session_state["username"] = username
                         st.success("Logged in successfully!")
-                        st.rerun()
+                        #st.rerun()
+                        st.switch_page("pages/login.py")
                     else:
                         st.warning("Login successful but no token received.")
                 else:

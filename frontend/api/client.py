@@ -98,3 +98,4 @@ def get_signed_url(photo_id, token):
         # Add logging to help debug
         st.warning(f"Signed URL error: {response.status_code} — {response.text}")
         return None
+    

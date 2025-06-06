@@ -1,58 +1,76 @@
 import streamlit as st
-from api.client import get_photo_details, get_user_photos, get_current_user, delete_photo
+from api.client import get_photo_details, get_signed_url, get_current_user, delete_photo
 from utils.session_state import get_session_state
+from components.navbar import show_navbar, show_sidebar
+
 
 state = get_session_state()
 
-st.title("📸 My Uploaded Photos")
+show_navbar(state)
+show_sidebar(state)
+st.title("📷 Photo Details")
 
-
-if "auth_token" not in st.session_state:
-    st.warning("You must be logged in to view your photos.")
+if not state.get("is_logged_in") or "auth_token" not in state:
+    st.warning("You must be logged in to view photo details.")
     st.stop()
 
-token = st.session_state["auth_token"]  # <-- Define token here
+token = state["auth_token"]
+
+photo_id = st.query_params.get("photo_id", [None])[0]
+print(st.query_params)
+
+if not photo_id:
+    st.error("No photo ID specified.")
+    st.stop()
 
 user_info = get_current_user(token)
-
 if not user_info or "pk" not in user_info:
-    st.warning("You must be logged in to view your photos.")
+    st.warning("Invalid session or not logged in.")
     st.stop()
 
-user_id = user_info["pk"]
-
 try:
-    photos = get_user_photos(user_id, token)
-    if "error" in photos:
-        st.error(f"Error loading photos: {photos['error']}")
+    details = get_photo_details(photo_id, token)
+    if not details:
+        st.error("Failed to load photo details.")
+        st.stop()
+
+    signed_url = get_signed_url(photo_id, token)
+
+    if signed_url:
+        col1, col2, col3 = st.columns([1, 3, 1]) 
+        with col2:
+            st.image(signed_url, use_container_width=True)
     else:
-        for photo in photos:
-            photo_id = photo.get("photo_id") or photo.get("id")
-            filename = photo.get("original_filename")
-            uploaded = photo.get("upload_time")
-            status = photo.get("processing_status")
+        st.warning("Could not load photo image.")
 
-            with st.expander(f"📄 {filename} — Status: {status}"):
-                st.write(f"🆔 ID: {photo_id}")
-                st.write(f"📅 Uploaded: {uploaded}")
+    st.markdown("### 🗂️ Photo Info")
+    st.markdown(f"**Filename:** {details.get('original_filename', 'N/A')}")
+    st.markdown(f"**Uploaded:** {details.get('upload_time', 'N/A')}")
+    st.markdown(f"**Status:** {details.get('processing_status', 'N/A')}")
 
-                try:
-                    details = get_photo_details(photo_id, token)
-                    st.markdown("**📌 Photo Details:**")
-                    st.json(details)
-                except Exception as e:
-                    st.error(f"Failed to load details: {e}")
+    if details.get("landmark_data"):
+        landmark = details["landmark_data"]
+        st.markdown("### 🏛️ Landmark Data")
+        st.markdown(f"**Detected Landmark:** {landmark.get('detected_landmark_name', 'N/A')}")
+        st.markdown(f"**Location:** {landmark.get('formatted_address', 'N/A')}")
+        coords = landmark.get('coordinates')
+        if coords:
+            st.markdown(f"**Coordinates:** {coords}")
 
-                if st.button(f"🗑️ Delete Photo ID {photo_id}", key=f"delete_{photo_id}"):
-                    result = delete_photo(photo_id, token)
-                    if result["success"]:
-                        st.success(f"Photo {photo_id} deleted successfully.")
-                        st.rerun()
-                    else:
-                        st.error(f"Failed to delete photo: {result['status_code']} {result['error']}")
+    if st.button("🗑️ Delete Photo"):
+        result = delete_photo(photo_id, token)
+        if result.get("success"):
+            st.success("Photo deleted successfully.")
+            st.switch_page("pages/gallery.py")
+        else:
+            st.error(f"Failed to delete photo: {result.get('error', 'Unknown error')}")
 
 except Exception as e:
-    st.error(f"Could not fetch photos: {e}")
+    st.error(f"An error occurred: {e}")
+
+if st.button("🔙 Back to My Gallery"):
+    st.query_params = {}
+    st.switch_page("pages/gallery.py")
 
 
 

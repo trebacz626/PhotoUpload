@@ -10,4 +10,4 @@ google-cloud-storage
 google-cloud-vision 
 googlemaps 
 Pillow
-whitenoise 
+whitenoise

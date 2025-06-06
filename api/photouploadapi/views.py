@@ -159,7 +159,8 @@ class PhotoViewSet(viewsets.GenericViewSet):
             if not landmarks or len(landmarks) == 0:
                 photo.processing_status = 'completed'
                 photo.save()
-                landmark = Landmark.objects.create(photo=photo, detected_landmark_name=str(response))
+                #landmark = Landmark.objects.create(photo=photo, detected_landmark_name=str(response))
+                landmark = Landmark.objects.create(photo=photo, detected_landmark_name="Unknown")
                 return landmark
 
             landmark = landmarks[0]  # take the first landmark
