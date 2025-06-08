@@ -294,25 +294,6 @@ class PhotoViewSet(viewsets.GenericViewSet):
 
         return self.sign_photo(photo)
 
-        # try:
-        #     bucket = storage_client.bucket(PHOTOS_BUCKET_NAME)
-        #     blob = bucket.blob(photo.gcs_blob_name)
-        #
-        #     # Generate signed URL valid for 60 minutes
-        #     url = blob.generate_signed_url(
-        #         expiration=timedelta(minutes=60),
-        #         method='GET',
-        #         version='v4'
-        #     )
-        #
-        #     return Response({"signed_url": url})
-        # # except Exception as e:
-        # #     return Response({"error": "Failed to generate signed URL.", "details": str(e)},
-        # #                     status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        # except Exception as e:
-        #     print(traceback.format_exc())  # Or log to a logger
-        #     return Response({"error": "Failed to generate signed URL.", "details": str(e)},
-        #                     status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['GET'])

@@ -1,10 +1,15 @@
 import streamlit as st
 from api.client import get_base_url, login_user
 import requests
+from utils.session_state import get_session_state
+from components.navbar import show_navbar, show_sidebar
 
 BACKEND_URL = get_base_url()
 
 st.set_page_config(page_title="Register")
+state = get_session_state()
+show_navbar(state)
+show_sidebar(state)
 st.title("Register")
 
 username = st.text_input("Username")
